@@ -39,6 +39,7 @@ type Vmsingle struct {
 	prometheusAPIV1WriteURL            string
 
 	// vmselect URLs.
+	vmselectAddr                   string
 	prometheusAPIV1ExportURL       string
 	prometheusAPIV1ExportNativeURL string
 	prometheusAPIV1QueryURL        string
@@ -50,6 +51,58 @@ type Vmsingle struct {
 // sets the default flags and populates the app instance state with runtime
 // values extracted from the application log (such as httpListenAddr).
 func StartVmsingleAt(instance, binary string, flags []string, cli *Client, output io.Writer) (*Vmsingle, error) {
+	app, stderrExtracts, err := startApp(instance, binary, flags, &appOptions{
+		defaultFlags: map[string]string{
+			"-storageDataPath":    fmt.Sprintf("%s/%s-%d", os.TempDir(), instance, time.Now().UnixNano()),
+			"-httpListenAddr":     "127.0.0.1:0",
+			"-graphiteListenAddr": ":0",
+			"-opentsdbListenAddr": "127.0.0.1:0",
+			"-vmselectAddr":       "127.0.0.1:0",
+		},
+		extractREs: []*regexp.Regexp{
+			storageDataPathRE,
+			httpListenAddrRE,
+			graphiteListenAddrRE,
+			openTSDBListenAddrRE,
+			vmselectAddrRE,
+		},
+		output: output,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &Vmsingle{
+		app: app,
+		ServesMetrics: &ServesMetrics{
+			metricsURL: fmt.Sprintf("http://%s/metrics", stderrExtracts[1]),
+			cli:        cli,
+		},
+		storageDataPath: stderrExtracts[0],
+		httpListenAddr:  stderrExtracts[1],
+
+		forceFlushURL: fmt.Sprintf("http://%s/internal/force_flush", stderrExtracts[1]),
+		forceMergeURL: fmt.Sprintf("http://%s/internal/force_merge", stderrExtracts[1]),
+
+		influxLineWriteURL:                 fmt.Sprintf("http://%s/influx/write", stderrExtracts[1]),
+		graphiteWriteAddr:                  stderrExtracts[2],
+		openTSDBHTTPURL:                    fmt.Sprintf("http://%s", stderrExtracts[3]),
+		vmselectAddr:                       stderrExtracts[4],
+		prometheusAPIV1ImportPrometheusURL: fmt.Sprintf("http://%s/prometheus/api/v1/import/prometheus", stderrExtracts[1]),
+		prometheusAPIV1WriteURL:            fmt.Sprintf("http://%s/prometheus/api/v1/write", stderrExtracts[1]),
+		prometheusAPIV1ExportURL:           fmt.Sprintf("http://%s/prometheus/api/v1/export", stderrExtracts[1]),
+		prometheusAPIV1ExportNativeURL:     fmt.Sprintf("http://%s/prometheus/api/v1/export/native", stderrExtracts[1]),
+		prometheusAPIV1QueryURL:            fmt.Sprintf("http://%s/prometheus/api/v1/query", stderrExtracts[1]),
+		prometheusAPIV1QueryRangeURL:       fmt.Sprintf("http://%s/prometheus/api/v1/query_range", stderrExtracts[1]),
+		prometheusAPIV1SeriesURL:           fmt.Sprintf("http://%s/prometheus/api/v1/series", stderrExtracts[1]),
+	}, nil
+}
+
+// StartLegacyVmsingleAt starts an instance of vmsingle v1.132.0 (last version
+// before pt-index) with the given flags. It also sets the default flags and
+// populates the app instance state with runtime values extracted from the
+// application log (such as httpListenAddr).
+func StartLegacyVmsingleAt(instance, binary string, flags []string, cli *Client, output io.Writer) (*Vmsingle, error) {
 	app, stderrExtracts, err := startApp(instance, binary, flags, &appOptions{
 		defaultFlags: map[string]string{
 			"-storageDataPath":    fmt.Sprintf("%s/%s-%d", os.TempDir(), instance, time.Now().UnixNano()),
@@ -92,6 +145,12 @@ func StartVmsingleAt(instance, binary string, flags []string, cli *Client, outpu
 		prometheusAPIV1QueryRangeURL:       fmt.Sprintf("http://%s/prometheus/api/v1/query_range", stderrExtracts[1]),
 		prometheusAPIV1SeriesURL:           fmt.Sprintf("http://%s/prometheus/api/v1/series", stderrExtracts[1]),
 	}, nil
+}
+
+// VmselectAddr returns the address at which the vmsingle process is listening
+// for vmselect connections.
+func (app *Vmsingle) VmselectAddr() string {
+	return app.vmselectAddr
 }
 
 // ForceFlush is a test helper function that forces the flushing of inserted

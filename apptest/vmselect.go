@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"testing"
+
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 )
 
 // Vmselect holds the state of a vmselect app and provides vmselect-specific
@@ -24,8 +26,8 @@ type Vmselect struct {
 // StartVmselect starts an instance of vmselect with the given flags. It also
 // sets the default flags and populates the app instance state with runtime
 // values extracted from the application log (such as httpListenAddr)
-func StartVmselect(instance string, flags []string, cli *Client, output io.Writer) (*Vmselect, error) {
-	app, stderrExtracts, err := startApp(instance, "../../bin/vmselect-race", flags, &appOptions{
+func StartVmselectAt(instance, binary string, flags []string, cli *Client, output io.Writer) (*Vmselect, error) {
+	app, stderrExtracts, err := startApp(instance, binary, flags, &appOptions{
 		defaultFlags: map[string]string{
 			"-httpListenAddr":          "127.0.0.1:0",
 			"-clusternativeListenAddr": "127.0.0.1:0",
@@ -125,6 +127,7 @@ func (app *Vmselect) PrometheusAPIV1QueryRange(t *testing.T, query string, opts 
 	values.Add("query", query)
 
 	res, _ := app.cli.PostForm(t, queryURL, values, opts.Headers)
+	logger.Errorf("%v", res)
 	return NewPrometheusAPIV1QueryResponse(t, res)
 }
 
