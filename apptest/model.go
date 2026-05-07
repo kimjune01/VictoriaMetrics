@@ -27,6 +27,7 @@ type PrometheusQuerier interface {
 	PrometheusAPIV1LabelValues(t *testing.T, labelName, query string, opts QueryOpts) *PrometheusAPIV1LabelValuesResponse
 	PrometheusAPIV1ExportNative(t *testing.T, query string, opts QueryOpts) []byte
 	PrometheusAPIV1Metadata(t *testing.T, metric string, limit int, opts QueryOpts) *PrometheusAPIV1Metadata
+	APIV1StatusMetricNamesStats(t *testing.T, limit, le, matchPattern string, opts QueryOpts) MetricNamesStatsResponse
 
 	APIV1AdminTSDBDeleteSeries(t *testing.T, matchQuery string, opts QueryOpts)
 
@@ -34,6 +35,9 @@ type PrometheusQuerier interface {
 	// separate interface or rename this interface to allow for multiple querier
 	// types.
 	GraphiteMetricsIndex(t *testing.T, opts QueryOpts) GraphiteMetricsIndexResponse
+	GraphiteMetricsFind(t *testing.T, query string, opts QueryOpts) GraphiteMetricsFindResponse
+	GraphiteMetricsExpand(t *testing.T, query string, opts QueryOpts) GraphiteMetricsExpandResponse
+	GraphiteRender(t *testing.T, target string, opts QueryOpts) GraphiteRenderResponse
 	GraphiteTagsTagSeries(t *testing.T, record string, opts QueryOpts)
 	GraphiteTagsTagMultiSeries(t *testing.T, records []string, opts QueryOpts)
 }
@@ -91,6 +95,9 @@ type QueryOpts struct {
 	Format         string
 	NoCache        string
 	Headers        http.Header
+	From           string
+	Until          string
+	StorageStep    string
 }
 
 func (qos *QueryOpts) getHeaders() http.Header {
@@ -123,6 +130,9 @@ func (qos *QueryOpts) asURLValues() url.Values {
 	addNonEmpty("latency_offset", qos.LatencyOffset)
 	addNonEmpty("format", qos.Format)
 	addNonEmpty("nocache", qos.NoCache)
+	addNonEmpty("from", qos.From)
+	addNonEmpty("until", qos.Until)
+	addNonEmpty("storage_step", qos.StorageStep)
 
 	return uv
 }
@@ -480,10 +490,6 @@ type TSDBStatusResponse struct {
 	Data      TSDBStatusResponseData
 }
 
-// GraphiteMetricsIndexResponse is an in-memory representation of the json response
-// returned by the /graphite/metrics/index.json endpoint.
-type GraphiteMetricsIndexResponse = []string
-
 // AdminTenantsResponse is an in-memory representation of the json response
 // returned by the /api/v1/admin/tenants endpoint.
 type AdminTenantsResponse struct {
@@ -533,3 +539,32 @@ func sortTSDBStatusResponseEntries(entries []TSDBStatusResponseEntry) {
 		return left.Count < right.Count
 	})
 }
+
+// GraphiteMetricsIndexResponse is an in-memory representation of the json response
+// returned by the /graphite/metrics/index.json endpoint.
+type GraphiteMetricsIndexResponse = []string
+
+type GraphiteMetric struct {
+	Id            string
+	Text          string
+	AllowChildren int
+	Expandable    int
+	Leaf          int
+}
+
+// GraphiteMetricsIndexResponse is an in-memory representation of the json response
+// returned by the /graphite/metrics/find endpoint.
+type GraphiteMetricsFindResponse = []GraphiteMetric
+
+// GraphiteMetricsExpandResponse is an in-memory representation of the json response
+// returned by the /graphite/metrics/expand endpoint.
+type GraphiteMetricsExpandResponse = []string
+
+type GraphiteRenderedTarget struct {
+	Target     string
+	Datapoints [][2]float64
+}
+
+// GraphiteRenderResponse is an in-memory representation of the json response
+// returned by the /graphite/render endpoint.
+type GraphiteRenderResponse = []GraphiteRenderedTarget

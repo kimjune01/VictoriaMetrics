@@ -226,7 +226,7 @@ func (app *Vmselect) APIV1AdminTSDBDeleteSeries(t *testing.T, matchQuery string,
 // and returns the statistics response for given params.
 //
 // See https://docs.victoriametrics.com/victoriametrics/single-server-victoriametrics/#track-ingested-metrics-usage
-func (app *Vmselect) MetricNamesStats(t *testing.T, limit, le, matchPattern string, opts QueryOpts) MetricNamesStatsResponse {
+func (app *Vmselect) APIV1StatusMetricNamesStats(t *testing.T, limit, le, matchPattern string, opts QueryOpts) MetricNamesStatsResponse {
 	t.Helper()
 
 	values := opts.asURLValues()
@@ -311,6 +311,79 @@ func (app *Vmselect) GraphiteMetricsIndex(t *testing.T, opts QueryOpts) Graphite
 	return index
 }
 
+// GraphiteMetricsFind finds metrics under a given path by sending a POST request
+// to /metrics/find endpoint.
+//
+// See https://docs.victoriametrics.com/victoriametrics/integrations/graphite/#metrics-api
+// and https://graphite.readthedocs.io/en/latest/metrics_api.html#metrics-find
+func (app *Vmselect) GraphiteMetricsFind(t *testing.T, query string, opts QueryOpts) GraphiteMetricsFindResponse {
+	t.Helper()
+
+	url := fmt.Sprintf("http://%s/select/%s/graphite/metrics/find", app.httpListenAddr, opts.getTenant())
+	values := opts.asURLValues()
+	values.Add("query", query)
+
+	resText, statusCode := app.cli.PostForm(t, url, values, opts.Headers)
+	if statusCode != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d, want %d, resp text=%q", statusCode, http.StatusOK, resText)
+	}
+
+	var res GraphiteMetricsFindResponse
+	if err := json.Unmarshal([]byte(resText), &res); err != nil {
+		t.Fatalf("could not unmarshal response data:\n%s\n err: %v", resText, err)
+	}
+	return res
+}
+
+// GraphiteMetricsExpand expands the given query with matching paths by sending
+// a POST request to /metrics/expand endpoint.
+//
+// See https://docs.victoriametrics.com/victoriametrics/integrations/graphite/#metrics-api
+// and https://graphite.readthedocs.io/en/latest/metrics_api.html#metrics-expand
+func (app *Vmselect) GraphiteMetricsExpand(t *testing.T, query string, opts QueryOpts) GraphiteMetricsExpandResponse {
+	t.Helper()
+
+	url := fmt.Sprintf("http://%s/select/%s/graphite/metrics/expand", app.httpListenAddr, opts.getTenant())
+	values := opts.asURLValues()
+	values.Add("query", query)
+
+	resText, statusCode := app.cli.PostForm(t, url, values, opts.Headers)
+	if statusCode != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d, want %d, resp text=%q", statusCode, http.StatusOK, resText)
+	}
+
+	var res GraphiteMetricsExpandResponse
+	if err := json.Unmarshal([]byte(resText), &res); err != nil {
+		t.Fatalf("could not unmarshal response data:\n%s\n err: %v", resText, err)
+	}
+	return res
+}
+
+// GraphiteRender retrieves the raw metric data by sending a POST request to
+// /render endpoint.
+//
+// See https://docs.victoriametrics.com/victoriametrics/integrations/graphite/#render-api
+// and https://graphite-api.readthedocs.io/en/latest/api.html#the-render-api-render
+func (app *Vmselect) GraphiteRender(t *testing.T, target string, opts QueryOpts) GraphiteRenderResponse {
+	t.Helper()
+
+	url := fmt.Sprintf("http://%s/select/%s/graphite/render", app.httpListenAddr, opts.getTenant())
+	values := opts.asURLValues()
+	values.Add("format", "json")
+	values.Add("target", target)
+
+	resText, statusCode := app.cli.PostForm(t, url, values, opts.Headers)
+	if statusCode != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d, want %d, resp text=%q", statusCode, http.StatusOK, resText)
+	}
+
+	var res GraphiteRenderResponse
+	if err := json.Unmarshal([]byte(resText), &res); err != nil {
+		t.Fatalf("could not unmarshal response data:\n%s\n err: %v", resText, err)
+	}
+	return res
+}
+
 // GraphiteTagsTagSeries is a test helper function that registers Graphite tags
 // for a single time series by sending a HTTP POST request to
 // /graphite/tags/tagSeries vmsingle endpoint.
@@ -352,7 +425,7 @@ func (app *Vmselect) APIV1AdminTenants(t *testing.T) *AdminTenantsResponse {
 		t.Fatalf("unexpected status code: got %d, want %d, resp text=%q", statusCode, http.StatusOK, res)
 	}
 
-	var tenants *AdminTenantsResponse
+	tenants := &AdminTenantsResponse{}
 	if err := json.Unmarshal([]byte(res), tenants); err != nil {
 		t.Fatalf("could not unmarshal tenants response data:\n%s\n err: %v", res, err)
 	}
