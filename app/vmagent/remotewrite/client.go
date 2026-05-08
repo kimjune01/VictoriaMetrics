@@ -509,6 +509,7 @@ again:
 }
 
 func (c *client) drainInMemoryQueue(stopCtx context.Context, block []byte) {
+	var ok bool
 	for {
 		select {
 		case <-stopCtx.Done():
@@ -516,13 +517,14 @@ func (c *client) drainInMemoryQueue(stopCtx context.Context, block []byte) {
 		default:
 		}
 
-		block = c.fq.MustReadInMemoryBlock(block[:0])
-		// The in memory queue has already been drained,
-		// or persisted queue is being used.
-		// In this case it is guaranteed that fq will be empty
-		if len(block) == 0 {
+		block, ok = c.fq.MustReadInMemoryBlock(block[:0])
+		if !ok {
+			// The in memory queue has already been drained,
+			// or persisted queue is being used.
+			// In this case it is guaranteed that fq will be empty
 			return
 		}
+
 		// at this stage c.stopCh should be closed
 		// so sendBlock function should not perform retries
 		if ok := c.sendBlock(block); !ok {

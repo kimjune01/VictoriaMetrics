@@ -238,7 +238,7 @@ func (fq *FastQueue) MustReadBlock(dst []byte) ([]byte, bool) {
 			return dst, false
 		}
 		if len(fq.ch) > 0 {
-			return fq.mustReadInMemoryBlockLocked(dst), true
+			return fq.mustReadInMemoryBlockLocked(dst)
 		}
 		if n := fq.pq.GetPendingBytes(); n > 0 {
 			data, ok := fq.pq.MustReadBlockNonblocking(dst)
@@ -257,16 +257,16 @@ func (fq *FastQueue) MustReadBlock(dst []byte) ([]byte, bool) {
 	}
 }
 
-func (fq *FastQueue) MustReadInMemoryBlock(dst []byte) []byte {
+func (fq *FastQueue) MustReadInMemoryBlock(dst []byte) ([]byte, bool) {
 	fq.mu.Lock()
 	defer fq.mu.Unlock()
 
 	return fq.mustReadInMemoryBlockLocked(dst)
 }
 
-func (fq *FastQueue) mustReadInMemoryBlockLocked(dst []byte) []byte {
+func (fq *FastQueue) mustReadInMemoryBlockLocked(dst []byte) ([]byte, bool) {
 	if len(fq.ch) == 0 {
-		return dst
+		return dst, false
 	}
 	if n := fq.pq.GetPendingBytes(); n > 0 {
 		logger.Panicf("BUG: the file-based queue must be empty when the inmemory queue is non-empty; it contains %d pending bytes", n)
@@ -276,7 +276,7 @@ func (fq *FastQueue) mustReadInMemoryBlockLocked(dst []byte) []byte {
 	fq.lastInmemoryBlockReadTime = fasttime.UnixTimestamp()
 	dst = append(dst, bb.B...)
 	blockBufPool.Put(bb)
-	return dst
+	return dst, true
 }
 
 // Dirname returns the directory name for persistent queue.
